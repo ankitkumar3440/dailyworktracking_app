@@ -1,108 +1,115 @@
-# Filename: full_day_tracker_enhanced.py
-
 import streamlit as st
 import pandas as pd
-from datetime import date
+from datetime import datetime, date
 import os
-import matplotlib.pyplot as plt
 
+st.set_page_config(page_title="Daily Work Tracker", layout="wide")
+st.title("📅 Daily Work & Deep Focus Tracker")
+
+# -------------------------
 # File to save logs
+# -------------------------
 LOG_FILE = "daily_routine_logs.csv"
 
-# Full-day routine blocks
-routine_blocks = [
-    "7–8 Wake & Activate",
-    "8–9 Breakfast",
-    "9–11 Deep Work #1",
-    "11–11:15 Break",
-    "11:15–12:30 Deep Work #2",
-    "12:30–1 Admin & Review",
-    "1–2 Lunch",
-    "2–4 Implementation Work #1",
-    "4–4:30 Break",
-    "4:30–6:30 Implementation Work #2",
-    "6:30–7:30 Friends/Family",
-    "7:30–8:30 Dinner",
-    "8:30–10:30 Implementation Work #3",
-    "10:30–11 Wind-Down",
-    "11–12 Sleep Prep"
+# -------------------------
+# Daily routine schedule
+# -------------------------
+routine = [
+    ("7:00-8:00", "Wake up & Morning Prep"),
+    ("8:00-9:00", "Breakfast"),
+    ("9:00-11:00", "Deep Work #1"),
+    ("11:00-11:15", "Short Break"),
+    ("11:15-12:30", "Deep Work #2"),
+    ("12:30-13:00", "Admin / Review"),
+    ("13:00-14:00", "Lunch"),
+    ("14:00-16:00", "Implementation / Tasks"),
+    ("16:00-17:00", "Talk with Family / Friends"),
+    ("17:00-18:00", "Implementation / Tasks"),
+    ("18:00-19:00", "Dinner"),
+    ("19:00-21:00", "Deep Work / Learning"),
+    ("21:00-22:00", "Relax / Plan Tomorrow"),
+    ("22:00-23:00", "Sleep Prep")
 ]
 
-st.title("🌞 Full-Day Routine Tracker (7 AM – 12 AM)")
+# -------------------------
+# Time-based reminder
+# -------------------------
+now = datetime.now()
+current_hour = now.hour + now.minute / 60
 
-# Sidebar - select day
-st.sidebar.header("Select Day")
-day = st.sidebar.selectbox("Day", ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"])
+reminder = ""
+if 7 <= current_hour < 8:
+    reminder = "⏰ Wake up & Morning Prep!"
+elif 8 <= current_hour < 9:
+    reminder = "⏰ Breakfast time! Fuel up for focus."
+elif 9 <= current_hour < 11:
+    reminder = "⏰ Deep Work #1: Focus on your top priority."
+elif 11 <= current_hour < 11.25:
+    reminder = "⏰ Short Break: Stretch & breathe."
+elif 11.25 <= current_hour < 12.5:
+    reminder = "⏰ Deep Work #2: Continue tasks."
+elif 12.5 <= current_hour < 13:
+    reminder = "⏰ Admin / Review: Wrap up morning tasks."
+elif 13 <= current_hour < 14:
+    reminder = "⏰ Lunch time!"
+elif 14 <= current_hour < 16:
+    reminder = "⏰ Implementation / Tasks"
+elif 16 <= current_hour < 17:
+    reminder = "⏰ Talk with Family / Friends"
+elif 17 <= current_hour < 18:
+    reminder = "⏰ Implementation / Tasks"
+elif 18 <= current_hour < 19:
+    reminder = "⏰ Dinner time!"
+elif 19 <= current_hour < 21:
+    reminder = "⏰ Deep Work / Learning"
+elif 21 <= current_hour < 22:
+    reminder = "⏰ Relax / Plan Tomorrow"
+elif 22 <= current_hour < 23:
+    reminder = "⏰ Sleep Prep"
 
-# Daily reminder
-st.sidebar.info("💡 Daily Coach Tip: Focus on deep work first, social/family time later. Keep phone away during blocks!")
+if reminder:
+    st.info(reminder)
 
-# Initialize form
-st.header(f"✅ Track Your Routine for {day}")
-with st.form("routine_form"):
-    task_status = {}
-    notes = {}
-    
-    for block in routine_blocks:
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            status = st.selectbox(f"{block}:", ["Not Done", "Done", "Skipped"], key=f"{day}_{block}_status")
-        with col2:
-            note = st.text_input(f"Notes for {block}", key=f"{day}_{block}_note")
-        task_status[block] = status
-        notes[block] = note
-    
-    submitted = st.form_submit_button("Save Today’s Progress")
-
-    if submitted:
-        # Prepare data row
-        row = {"Date": str(date.today()), "Day": day}
-        for block in routine_blocks:
-            row[f"{block} Status"] = task_status[block]
-            row[f"{block} Notes"] = notes[block]
-        
-        # Save to CSV
+# -------------------------
+# Daily task logging
+# -------------------------
+st.subheader("Log your completed tasks today")
+task_input = st.text_area("What did you accomplish today?")
+if st.button("Log Task"):
+    if task_input.strip():
+        today = date.today().isoformat()
+        log_entry = pd.DataFrame([[today, task_input]], columns=["Date", "Task"])
         if os.path.exists(LOG_FILE):
             df = pd.read_csv(LOG_FILE)
-            df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
+            df = pd.concat([df, log_entry], ignore_index=True)
         else:
-            df = pd.DataFrame([row])
+            df = log_entry
         df.to_csv(LOG_FILE, index=False)
-        st.success("✅ Progress saved successfully!")
+        st.success("✅ Task logged!")
+    else:
+        st.warning("Please enter a task before logging.")
 
-# Show weekly summary
+# -------------------------
+# Show past week summary
+# -------------------------
+st.subheader("Past Tasks")
 if os.path.exists(LOG_FILE):
-    st.header("📊 Weekly Summary & Completion Graph")
     df = pd.read_csv(LOG_FILE)
+    st.dataframe(df.tail(20))  # show last 20 entries
 
-    # Filter last 6 days (Mon-Sat)
-    df_week = df[df['Day'] != 'Sunday'].tail(6)
+    # Show bar chart: tasks per day
+    df['Date'] = pd.to_datetime(df['Date'])
+    summary = df.groupby(df['Date'].dt.date).count()['Task'].reset_index()
+    summary.rename(columns={'Task': 'Tasks Completed'}, inplace=True)
+    summary.set_index('Date', inplace=True)
+    
+    st.bar_chart(summary)
+else:
+    st.info("No tasks logged yet.")
 
-    # Count Done tasks per day
-    completion = []
-    for i, r in df_week.iterrows():
-        done_count = sum([1 for b in routine_blocks if r[f"{b} Status"] == "Done"])
-        completion.append(done_count)
-
-    # Bar chart
-    fig, ax = plt.subplots(figsize=(10, 4))
-    ax.bar(df_week['Day'], completion, color='green')
-    ax.set_ylim(0, len(routine_blocks))
-    ax.set_ylabel("Tasks Completed ✅")
-    ax.set_title("Weekly Task Completion")
-    st.pyplot(fig)
-
-    # Show color-coded table
-    st.subheader("Detailed Status Table")
-    def color_status(val):
-        if val == "Done":
-            color = "background-color: lightgreen"
-        elif val == "Skipped":
-            color = "background-color: lightcoral"
-        else:
-            color = "background-color: lightgray"
-        return color
-
-    df_display = df_week.copy()
-    status_cols = [f"{b} Status" for b in routine_blocks]
-    st.dataframe(df_display.style.applymap(color_status, subset=status_cols))
+# -------------------------
+# Routine overview
+# -------------------------
+st.subheader("📌 Daily Routine Overview")
+routine_df = pd.DataFrame(routine, columns=["Time", "Activity"])
+st.table(routine_df)
